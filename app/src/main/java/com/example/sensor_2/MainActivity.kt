@@ -40,8 +40,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private var currentX = 0.0
 
-    private val READING = 50
-    private val WRITING = 60000
+    private val READING = 50 //milis
+    private val WRITING = 60000 //milis
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
