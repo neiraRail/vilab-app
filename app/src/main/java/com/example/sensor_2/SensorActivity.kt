@@ -23,7 +23,7 @@ import java.time.LocalTime
 import java.util.*
 
 
-class MainActivity : AppCompatActivity(), SensorEventListener {
+class SensorActivity : AppCompatActivity(), SensorEventListener {
 
     private var plotData: Boolean = true
     private var writeData: Boolean = false
@@ -37,11 +37,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private var hiloGrafica: Thread? = null
     private var hiloEscribir: Thread? = null
+    private var isRunning: Boolean = false
 
     private var currentX = 0.0
 
-    private val READING = 50 //milis
-    private val WRITING = 60000 //milis
+    private val READING = 50 // milliseconds
+    private val WRITING = 60000 // milliseconds
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,7 +56,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Sensor manager
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST, SensorManager.SENSOR_DELAY_FASTEST)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST)
         }
 
         // Lineas del gráfico
@@ -89,36 +90,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         graph.viewport.setMinY(0.0)
         graph.viewport.setMaxY(10.0)
         graph.gridLabelRenderer.isHorizontalLabelsVisible = false
-        graph.gridLabelRenderer.gridStyle = GridLabelRenderer.GridStyle.NONE;
+        graph.gridLabelRenderer.gridStyle = GridLabelRenderer.GridStyle.NONE
 
-        // Inicialización
+        // Initialization
         currentX = 0.0
         lastValues = ArrayList()
         lastTimes = ArrayList()
 
         // Hilo que cada 30 milisegundos levantará flag para actualizar gráfico
-        hiloGrafica?.interrupt()//Interrumpir el thread si no es null
-        hiloGrafica = Thread{
+        isRunning = true
+        hiloGrafica = Thread {
             var times = 0
-            while (true){
+            while (isRunning) {
                 plotData = true
                 Thread.sleep(READING.toLong())
-                if(times>WRITING/READING){
+                if (times > WRITING / READING) {
                     times = 0
                     writeData = true
                 }
                 times++
             }
         }
-        hiloGrafica!!.start()
+        hiloGrafica?.start()
 
-        hiloEscribir?.interrupt()
-        hiloEscribir = Thread{
+        hiloEscribir = Thread {
             var fileName = ""
             val path = "lectura"
             var lectura = 0
-            while (true){
-                if(writeData && lastValues!=null && lastTimes!=null){
+            while (isRunning) {
+                if (writeData && lastValues != null && lastTimes != null) {
                     val lastValuesCopy = lastValues
                     val lastTimesCopy = lastTimes
                     lastValues = ArrayList()
@@ -126,25 +126,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     fileName = "sensor_2_lectura_$lectura.txt"
 
                     val myFile = File(applicationContext.getExternalFilesDir(path), fileName)
-                    if (myFile.exists()){
+                    if (myFile.exists()) {
                         myFile.delete()
                     }
 
                     val myfile = File(applicationContext.getExternalFilesDir(path), fileName)
                     FileOutputStream(myfile, true).bufferedWriter().use { writer ->
-                        for((iter, value: Vector<Double>) in lastValuesCopy!!.withIndex()){
+                        for ((iter, value: Vector<Double>) in lastValuesCopy!!.withIndex()) {
                             writer.appendLine("\"${lastTimesCopy!![iter]}\", ${value[0]}, ${value[1]}, ${value[2]}")
                         }
                     }
-                    this.runOnUiThread(Runnable {
+                    runOnUiThread {
                         Toast.makeText(this, "archivo n° $lectura escrito :)", Toast.LENGTH_SHORT).show()
-                    })
+                    }
                     lectura++
                     writeData = false
                 }
             }
         }
-        hiloEscribir!!.start()
+        hiloEscribir?.start()
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -154,29 +154,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val x = values[0].toDouble()
         val y = values[1].toDouble()
         val z = values[2].toDouble()
-//        val accelerationSquareRoot =
-//            (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH)
-//        val acceleration = sqrt(accelerationSquareRoot)
-        //accelerationQueue.offer(acceleration)
         seriesX?.appendData(DataPoint(currentX, x), true, 100)
-        seriesY?.appendData(DataPoint(currentX, y),true,100)
-        seriesZ?.appendData(DataPoint(currentX, z),true,100)
+        seriesY?.appendData(DataPoint(currentX, y), true, 100)
+        seriesZ?.appendData(DataPoint(currentX, z), true, 100)
         val vector = Vector<Double>(3)
         vector.addElement(x)
         vector.addElement(y)
         vector.addElement(z)
-        lastValues!!.add(vector)
-        lastTimes!!.add(LocalTime.now().toString())
+        lastValues?.add(vector)
+        lastTimes?.add(LocalTime.now().toString())
 
         currentX += 1
-
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onSensorChanged(event: SensorEvent?) {
         if (event != null) {
             if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-                if(plotData){
+                if (plotData) {
                     getAccelerometer(event)
                     plotData = false
                 }
@@ -185,15 +180,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(p0: Sensor?, p1: Int) {
-        return
+        // Not implemented
     }
 
     override fun onDestroy() {
-        sensorManager.unregisterListener(this)
-        hiloEscribir?.interrupt();
-        hiloGrafica?.interrupt();
         super.onDestroy()
+        isRunning = false
+        try {
+            hiloEscribir?.join()
+        } catch (e: InterruptedException) {
+            e.printStackTrace()
+        }
+        sensorManager.unregisterListener(this)
     }
+}
 
 
 
@@ -235,7 +235,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 //            }
 //        }
 //    }
-}
 
 
 
